@@ -164,7 +164,9 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		goto out;
 
 #ifdef CONFIG_ALWAYS_PERMISSIVE
-    new_value = 0;
+        new_value = 0;
+#else
+        new_value = !!new_value;
 #endif
 
 	if (new_value != selinux_enforcing) {
