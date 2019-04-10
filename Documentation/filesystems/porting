@@ -228,7 +228,7 @@ anything from oops to silent memory corruption.
 ---
 [mandatory]
 
-	FS_NOMOUNT is gone.  If you use it - just set SB_NOUSER in flags
+	FS_NOMOUNT is gone.  If you use it - just set MS_NOUSER in flags
 (see rootfs for one kind of solution and bdev/socket/pipe for another).
 
 ---
@@ -597,12 +597,6 @@ in your dentry operations instead.
 	->rename() has an added flags argument.  Any flags not handled by the
         filesystem should result in EINVAL being returned.
 --
-[mandatory]
-
-	[should've been added in 2016] stale comment in finish_open()
-	nonwithstanding, failure exits in ->atomic_open() instances should
-	*NOT* fput() the file, no matter what.  Everything is handled by the
-	caller.
 [recommended]
 	->lookup() instances doing an equivalent of
 		if (IS_ERR(inode))
