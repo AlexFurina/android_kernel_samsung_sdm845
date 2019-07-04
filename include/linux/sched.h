@@ -2494,7 +2494,11 @@ static inline void get_task_struct(struct task_struct *t) {
 	atomic_inc(&t->usage);
 }
 #else
-#define get_task_struct(tsk) do { refcount_inc(&(tsk)->usage); } while(0)
+static inline struct task_struct *get_task_struct(struct task_struct *t)
+{
+	refcount_inc(&t->usage);
+	return t;
+}
 #endif
 
 extern void __put_task_struct(struct task_struct *t);
