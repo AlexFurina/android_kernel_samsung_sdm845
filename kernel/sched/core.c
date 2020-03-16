@@ -3652,6 +3652,8 @@ static void __sched notrace __schedule(bool preempt)
 		rq->curr = next;
 		++*switch_count;
 
+		psi_sched_switch(prev, next, !task_on_rq_queued(prev));
+
 		trace_sched_switch(preempt, prev, next);
 		sec_debug_task_sched_log(cpu, preempt, next, prev);
 		rq = context_switch(rq, prev, next, &rf); /* unlocks the rq */
