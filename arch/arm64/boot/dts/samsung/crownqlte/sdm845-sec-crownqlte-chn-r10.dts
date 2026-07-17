@@ -26,6 +26,7 @@
 #include "sdm845-sec-crownqlte-fingerprint-sensor-r04.dtsi"
 #include "sdm845-sec-crownqlte-chn-nfc-r03.dtsi"
 #include "sdm845-sec-crownqlte-mst-r00.dtsi"
+#include "sdm845-sec-crownqlte-memory.dtsi"
 #include "sdm845-camera-sensor-crownqlte-r00.dtsi"
 
 / {
