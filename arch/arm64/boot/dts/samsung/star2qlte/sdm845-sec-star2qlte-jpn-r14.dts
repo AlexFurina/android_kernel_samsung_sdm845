@@ -30,6 +30,7 @@
 #include "sdm845-camera-sensor-star2qlte-r06.dtsi"
 #include "sdm845-sec-star2qlte-jpn-felica-r00.dtsi"
 #include "sdm845-sec-star2qlte-jpn-isdbt-r00.dtsi"
+#include "sdm845-sec-star2qlte-memory.dtsi"
 
 / {
 	model = "Samsung STAR2QLTE JPN PROJECT Rev14";

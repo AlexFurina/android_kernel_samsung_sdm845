@@ -26,6 +26,7 @@
 #include "sdm845-sec-starqlte-fingerprint-sensor-r05.dtsi"
 #include "sdm845-sec-starqlte-mst-r00.dtsi"
 #include "sdm845-sec-starqlte-chn-nfc-r02.dtsi"
+#include "sdm845-sec-starqlte-memory.dtsi"
 #include "sdm845-camera-sensor-starqlte-r06.dtsi"
 
 / {

@@ -29,6 +29,7 @@
 #include "sdm845-camera-sensor-crownqlte-r00.dtsi"
 #include "sdm845-sec-crownqlte-jpn-felica-r03.dtsi"
 #include "sdm845-sec-crownqlte-jpn-isdbt-r03.dtsi"
+#include "sdm845-sec-crownqlte-memory.dtsi"
 
 / {
 	model = "Samsung CROWNQLTE JPN PROJECT Rev03";

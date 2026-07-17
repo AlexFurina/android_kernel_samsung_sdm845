@@ -30,6 +30,7 @@
 #include "sdm845-camera-sensor-starqlte-r06.dtsi"
 #include "sdm845-sec-starqlte-jpn-felica-r00.dtsi"
 #include "sdm845-sec-starqlte-jpn-isdbt-r00.dtsi"
+#include "sdm845-sec-starqlte-memory.dtsi"
 
 / {
 	model = "Samsung STARQLTE JPN PROJECT Rev14";
