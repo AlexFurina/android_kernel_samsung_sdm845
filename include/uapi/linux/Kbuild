@@ -33,6 +33,7 @@ no-export-headers += stm.h
 no-export-headers += tee.h
 no-export-headers += userio.h
 no-export-headers += wil6210_uapi.h
+no-export-headers += self_display/
 
 ifneq ($(VSERVICES_SUPPORT), "")
 include include/linux/Kbuild.vservices

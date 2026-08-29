@@ -80,7 +80,7 @@ extern "C" {
 #define  DRM_MODE_FLAG_SUPPORTS_RGB		(1<<20)
 #define  DRM_MODE_FLAG_SUPPORTS_YUV422		(1<<21)
 #define  DRM_MODE_FLAG_SUPPORTS_YUV420		(1<<22)
-
+#define  DRM_MODE_FLAG_SUPPORTS_YUV		(1<<23)
 
 /* Picture aspect ratio options */
 #define DRM_MODE_PICTURE_ASPECT_NONE		0

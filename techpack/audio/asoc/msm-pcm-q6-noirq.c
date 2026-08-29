@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/time.h>
+#include <linux/mutex.h>
 #include <linux/wait.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -39,6 +40,8 @@
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
+
+#include <linux/msm_pcie.h>
 
 #define PCM_MASTER_VOL_MAX_STEPS	0x2000
 static const DECLARE_TLV_DB_LINEAR(msm_pcm_vol_gain, 0,
@@ -250,6 +253,10 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 	prtd->dsp_cnt = 0;
 	prtd->set_channel_map = false;
 	runtime->private_data = prtd;
+
+	pr_info("%s: sec_pcie_l1ss_disable()\n", __func__);
+	sec_pcie_l1ss_disable(L1SS_AUDIO);
+
 	return 0;
 
 fail_cmd:
@@ -600,7 +607,6 @@ static int msm_pcm_close(struct snd_pcm_substream *substream)
 	}
 
 	mutex_lock(&pdata->lock);
-
 	if (ac) {
 		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
 			dir = IN;
@@ -635,6 +641,9 @@ static int msm_pcm_close(struct snd_pcm_substream *substream)
 					 SNDRV_PCM_STREAM_CAPTURE);
 	kfree(prtd);
 	runtime->private_data = NULL;
+
+	pr_info("%s: sec_pcie_l1ss_enable()\n", __func__);
+	sec_pcie_l1ss_enable(L1SS_AUDIO);
 	mutex_unlock(&pdata->lock);
 
 	return 0;
@@ -711,10 +720,11 @@ static int msm_pcm_volume_ctl_put(struct snd_kcontrol *kcontrol,
 	}
 	soc_prtd = substream->private_data;
 	if (!substream->runtime || !soc_prtd) {
-		 pr_debug("%s substream runtime or private_data not found\n",
-                                  __func__);
+		pr_err("%s substream runtime or private_data not found\n",
+				 __func__);
 		return 0;
 	}
+
 	pdata = (struct msm_plat_data *)
 			dev_get_drvdata(soc_prtd->platform->dev);
 	if (!pdata) {

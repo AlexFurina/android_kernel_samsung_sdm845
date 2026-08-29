@@ -153,7 +153,6 @@ static int show_stat(struct seq_file *p, void *v)
 		seq_putc(p, '\n');
 	}
 	seq_put_decimal_ull(p, "intr ", (unsigned long long)sum);
-
 	/* sum again ? it could be updated? */
 	for_each_irq_nr(j)
 		seq_put_decimal_ull(p, " ", kstat_irqs_usr(j));
