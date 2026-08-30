@@ -62,13 +62,16 @@
 #endif
 
 #ifdef CONFIG_SEC_DEBUG_SUMMARY
-#include <linux/sec_debug.h>
 #include <linux/sec_debug_summary.h>
 #endif
 
 #ifdef CONFIG_SEC_PM
 #include <linux/regulator/consumer.h>
 #include <linux/qpnp/pin.h>
+#endif
+
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
 #endif
 
 #include "../kernel/time/tick-internal.h"
@@ -1904,7 +1907,9 @@ static int lpm_probe(struct platform_device *pdev)
 		goto failed;
 	}
 
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
 	summary_set_lpm_info_cci(virt_to_phys((void *)&lpm_root_node->last_level));
+#endif
 	/* Add lpm_debug to Minidump*/
 	strlcpy(md_entry.name, "KLPMDEBUG", sizeof(md_entry.name));
 	md_entry.virt_addr = (uintptr_t)lpm_debug;
