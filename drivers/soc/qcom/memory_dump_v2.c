@@ -25,8 +25,11 @@
 #include <linux/module.h>
 
 #ifdef CONFIG_SEC_DEBUG_SUMMARY
-#include <linux/sec_debug.h>
 #include <linux/sec_debug_summary.h>
+#endif
+
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
 #endif
 
 #define MSM_DUMP_TABLE_VERSION		MSM_DUMP_MAKE_VERSION(2, 0)
@@ -48,11 +51,13 @@ struct msm_memory_dump {
 static struct msm_memory_dump memdump;
 static struct msm_mem_dump_vaddr_tbl vaddr_tbl;
 
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
 void summary_set_msm_memdump_info(struct sec_debug_summary_data_apss *apss)
 {
 	apss->msm_memdump_paddr = (uint64_t)memdump.table_phys;
 	pr_info("%s : 0x%llx\n", __func__, apss->msm_memdump_paddr);
 }
+#endif
 
 uint32_t msm_dump_table_version(void)
 {

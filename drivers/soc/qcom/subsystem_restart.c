@@ -1256,7 +1256,9 @@ void subsys_set_reset_reason(const char *name, int val)
 int subsystem_restart_dev(struct subsys_device *dev)
 {
 	const char *name;
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
 	int ssr_enable = 1;
+#endif
 
 	if (!get_device(&dev->dev))
 		return -ENODEV;
@@ -1268,6 +1270,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 
 	name = dev->desc->name;
 
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
 	if ((sec_debug_is_modem_separate_debug_ssr() ==
 	    SEC_DEBUG_MODEM_SEPARATE_EN)
 	    && strcmp(name, "slpi")
@@ -1282,6 +1285,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		dev->restart_level = RESET_SUBSYS_COUPLED;
 	else
 		dev->restart_level = RESET_SOC;
+#endif
 
 	/* move from subsystem_crash(),
 	 * clear force stop gpio and silent ssr flag
