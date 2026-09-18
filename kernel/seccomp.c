@@ -654,6 +654,7 @@ static int __seccomp_filter(int this_syscall, const struct seccomp_data *sd,
 
 	case SECCOMP_RET_KILL:
 	default:
+
 		audit_seccomp(this_syscall, SIGSYS, action);
 		do_exit(SIGSYS);
 	}

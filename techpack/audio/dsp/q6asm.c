@@ -92,11 +92,6 @@ struct asm_mmap {
 
 static struct asm_mmap this_mmap;
 
-struct audio_session {
-	struct audio_client *ac;
-	spinlock_t session_lock;
-	struct mutex mutex_lock_per_session;
-};
 /* session id: 0 reserved */
 static struct audio_session session[ASM_ACTIVE_STREAMS_ALLOWED + 1];
 
@@ -191,6 +186,13 @@ static int is_adsp_raise_event(uint32_t cmd)
 	}
 	return -EINVAL;
 }
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+struct audio_session *q6asm_get_audio_session(void)
+{
+	return session;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 static inline void q6asm_set_flag_in_token(union asm_token_struct *asm_token,
 					   int flag, int flag_offset)
@@ -1081,7 +1083,7 @@ void q6asm_audio_client_free(struct audio_client *ac)
 
 	mutex_lock(&session_lock);
 
-	pr_debug("%s: Session id %d\n", __func__, ac->session);
+	pr_info("%s: Session id %d\n", __func__, ac->session);
 	if (ac->io_mode & SYNC_IO_MODE) {
 		for (loopcnt = 0; loopcnt <= OUT; loopcnt++) {
 			port = &ac->port[loopcnt];
@@ -1868,8 +1870,10 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 	    (data->opcode != ASM_DATA_EVENT_EOS) &&
 	    (data->opcode != ASM_SESSION_EVENTX_OVERFLOW) &&
 	    (data->opcode != ASM_SESSION_EVENT_RX_UNDERFLOW)) {
-		if (payload == NULL) {
-			pr_err("%s: payload is null\n", __func__);
+		if (payload == NULL ||
+				(data->payload_size < (2 * sizeof(uint32_t)))) {
+			pr_err("%s: payload is null or invalid size[%d]\n",
+				__func__, data->payload_size);
 			spin_unlock_irqrestore(
 				&(session[session_id].session_lock), flags);
 			return -EINVAL;
@@ -2312,9 +2316,7 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		if (payload_size > UINT_MAX - sizeof(struct msm_adsp_event_data)) {
 			pr_err("%s: payload size = %d exceeds limit.\n",
 				__func__, payload_size);
-			spin_unlock_irqrestore(
-					&(session[session_id].session_lock),
-					flags);
+			spin_unlock(&(session[session_id].session_lock));
 			return -EINVAL;
 		}
 
@@ -3026,7 +3028,7 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 	if (ac->perf_mode != LEGACY_PCM_MODE)
 		open.postprocopo_id = ASM_STREAM_POSTPROCOPO_ID_NONE;
 
-	pr_debug("%s: perf_mode %d asm_topology 0x%x bps %d\n", __func__,
+	pr_info("%s: perf_mode %d asm_topology 0x%x bps %d\n", __func__,
 		 ac->perf_mode, open.postprocopo_id, open.bits_per_sample);
 
 	/*
@@ -4208,6 +4210,7 @@ int q6asm_set_encdec_chan_map(struct audio_client *ac,
 		return -EINVAL;
 	}
 
+
 	pr_debug("%s: Session %d, num_channels = %d\n",
 			 __func__, ac->session, num_channels);
 	q6asm_add_hdr(ac, &chan_map.hdr, sizeof(chan_map), TRUE);
@@ -4293,6 +4296,7 @@ int q6asm_enc_cfg_blk_pcm_v4(struct audio_client *ac,
 		rc = -EINVAL;
 		goto fail_cmd;
 	}
+
 
 	pr_debug("%s: session[%d]rate[%d]ch[%d]bps[%d]wordsize[%d]\n", __func__,
 		 ac->session, rate, channels,
@@ -4398,6 +4402,7 @@ int q6asm_enc_cfg_blk_pcm_v3(struct audio_client *ac,
 		rc = -EINVAL;
 		goto fail_cmd;
 	}
+
 
 	pr_debug("%s: session[%d]rate[%d]ch[%d]bps[%d]wordsize[%d]\n", __func__,
 		 ac->session, rate, channels,
@@ -4641,6 +4646,7 @@ int q6asm_enc_cfg_blk_pcm_native(struct audio_client *ac,
 	struct asm_multi_channel_pcm_enc_cfg_v2  enc_cfg;
 	u8 *channel_mapping;
 	u32 frames_per_buf = 0;
+
 	int rc = 0;
 
 	if (channels > PCM_FORMAT_MAX_NUM_CHANNEL) {
@@ -9540,7 +9546,7 @@ int q6asm_send_cal(struct audio_client *ac)
 
 	if (cal_utils_is_cal_stale(cal_block)) {
 		rc = 0; /* not error case */
-		pr_err("%s: cal_block is stale\n",
+		pr_debug("%s: cal_block is stale\n",
 			__func__);
 		goto unlock;
 	}

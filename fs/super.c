@@ -841,7 +841,9 @@ int do_remount_sb2(struct vfsmount *mnt, struct super_block *sb, int flags, void
 			     sb->s_type->name, retval);
 		}
 	}
+
 	sb->s_flags = (sb->s_flags & ~MS_RMT_MASK) | (flags & MS_RMT_MASK);
+
 	/* Needs to be ordered wrt mnt_is_readonly() */
 	smp_wmb();
 	sb->s_readonly_remount = 0;
