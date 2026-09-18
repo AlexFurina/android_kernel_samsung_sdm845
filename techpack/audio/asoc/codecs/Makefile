@@ -1,3 +1,6 @@
+snd-soc-max98512-objs := max98512.o
+snd-soc-maxim-dsm-objs := maxim_dsm.o
+snd-soc-maxim-dsm-cal-objs := maxim_dsm_cal.o maxim_dsm_power.o
 snd-soc-wcd9xxx-objs := wcd9xxx-common-v2.o wcd9xxx-resmgr-v2.o \
 			wcdcal-hwdep.o wcd9xxx-soc-init.o wcd-dsp-utils.o \
 			wcd-dsp-mgr.o audio-ext-clk-up.o
@@ -14,6 +17,9 @@ snd-soc-wcd-spi-objs := wcd-spi.o
 snd-soc-wcd9335-objs := wcd9335.o
 snd-soc-wcd-cpe-objs := wcd_cpe_services.o wcd_cpe_core.o
 
+obj-$(CONFIG_SND_SOC_MAX98512)	+= snd-soc-max98512.o
+obj-$(CONFIG_SND_SOC_MAXIM_DSM)	+= snd-soc-maxim-dsm.o
+obj-$(CONFIG_SND_SOC_MAXIM_DSM_CAL)	+= snd-soc-maxim-dsm-cal.o
 obj-$(CONFIG_SND_SOC_WCD9335) += snd-soc-wcd9335.o
 obj-$(CONFIG_SND_SOC_WCD_CPE)   += snd-soc-wcd-cpe.o
 obj-$(CONFIG_SND_SOC_WCD934X)	+= wcd934x/

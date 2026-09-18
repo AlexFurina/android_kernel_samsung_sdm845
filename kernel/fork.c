@@ -148,6 +148,9 @@ static inline struct task_struct *alloc_task_struct_node(int node)
 
 static inline void free_task_struct(struct task_struct *tsk)
 {
+#ifdef CONFIG_DEBUG_TASK_USAGE
+	tsk->dummy = 0x6B6B6B6B6B6B6B;
+#endif
 	kmem_cache_free(task_struct_cachep, tsk);
 }
 #endif
@@ -498,6 +501,9 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 	stack_vm_area = task_stack_vm_area(tsk);
 
 	err = arch_dup_task_struct(tsk, orig);
+#ifdef CONFIG_DEBUG_TASK_USAGE
+	tsk->dummy = TASK_STRUCT_DUMMY_VAL;
+#endif
 
 	/*
 	 * arch_dup_task_struct() clobbers the stack-related fields.  Make
@@ -567,7 +573,7 @@ free_tsk:
 static __latent_entropy int dup_mmap(struct mm_struct *mm,
 					struct mm_struct *oldmm)
 {
-	struct vm_area_struct *mpnt, *tmp, *prev, **pprev;
+	struct vm_area_struct *mpnt, *tmp, *prev, **pprev, *last = NULL;
 	struct rb_node **rb_link, *rb_parent;
 	int retval;
 	unsigned long charge;
@@ -673,6 +679,15 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 		rb_parent = &tmp->vm_rb;
 
 		mm->map_count++;
+		if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT)) {
+			/*
+			 * Mark this VMA as changing to prevent the
+			 * speculative page fault hanlder to process
+			 * it until the TLB are flushed below.
+			 */
+			last = mpnt;
+			vm_raw_write_begin(mpnt);
+		}
 		retval = copy_page_range(mm, oldmm, mpnt);
 
 		if (tmp->vm_ops && tmp->vm_ops->open)
@@ -687,6 +702,21 @@ static __latent_entropy int dup_mmap(struct mm_struct *mm,
 out:
 	up_write(&mm->mmap_sem);
 	flush_tlb_mm(oldmm);
+
+	if (IS_ENABLED(CONFIG_SPECULATIVE_PAGE_FAULT)) {
+		/*
+		 * Since the TLB has been flush, we can safely unmark the
+		 * copied VMAs and allows the speculative page fault handler to
+		 * process them again.
+		 * Walk back the VMA list from the last marked VMA.
+		 */
+		for (; last; last = last->vm_prev) {
+			if (last->vm_flags & VM_DONTCOPY)
+				continue;
+			vm_raw_write_end(last);
+		}
+	}
+
 	up_write(&oldmm->mmap_sem);
 fail_uprobe_end:
 	uprobe_end_dup_mmap();
@@ -2004,7 +2034,6 @@ static __latent_entropy struct task_struct *copy_process(
 
 	trace_task_newtask(p, clone_flags);
 	uprobe_copy_process(p, clone_flags);
-
 	return p;
 
 bad_fork_cancel_cgroup:
@@ -2059,6 +2088,7 @@ bad_fork_free:
 	put_task_stack(p);
 	free_task(p);
 fork_out:
+	pr_err("copy_process failed with %d\n", retval);
 	return ERR_PTR(retval);
 }
 
