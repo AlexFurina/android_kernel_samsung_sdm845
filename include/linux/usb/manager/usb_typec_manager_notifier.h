@@ -50,20 +50,23 @@ typedef enum {
 	MANAGER_NOTIFY_MUIC_CPUIDLE,
 	MANAGER_NOTIFY_MUIC_CPUFREQ,
 	MANAGER_NOTIFY_MUIC_TIMEOUT_OPEN_DEVICE,
+	MANAGER_NOTIFY_MUIC_UART,
 
+	MANAGER_NOTIFY_CCIC_SENSORHUB,
+	MANAGER_NOTIFY_CCIC_WACOM,
 /* CCIC */
 	MANAGER_NOTIFY_CCIC_INITIAL = 20,
 	MANAGER_NOTIFY_CCIC_MUIC,
 	MANAGER_NOTIFY_CCIC_USB,
 	MANAGER_NOTIFY_CCIC_BATTERY,
+	MANAGER_NOTIFY_CCIC_SUB_BATTERY,
 	MANAGER_NOTIFY_CCIC_DP,
 	MANAGER_NOTIFY_CCIC_USBDP,
-	MANAGER_NOTIFY_CCIC_SENSORHUB,
-	MANAGER_NOTIFY_CCIC_WACOM,
 
 /* VBUS */
 	MANAGER_NOTIFY_VBUS_USB = 30,
 	MANAGER_NOTIFY_VBUS_CHARGER,
+	MANAGER_NOTIFY_PDIC_DELAY_DONE,
 } manager_notifier_device_t;
 
 typedef enum {
@@ -88,7 +91,7 @@ typedef enum {
 typedef enum {
 	EVENT_LOAD = 0,
 	EVENT_CANCEL,
-} muic_fake_event;
+} manager_muic_event;
 #endif
 
 typedef struct
@@ -102,35 +105,57 @@ typedef struct
 	void *pd;
 } MANAGER_NOTI_TYPEDEF;
 
+#define PDIC_BATTERY	(1<<0)
+#define PDIC_USB	(1<<1)
+#define PDIC_DP		(1<<2)
+#define PDIC_DELAY_DONE	(1<<3)
+
+struct typec_manager_event_work
+{
+	struct work_struct typec_manager_work;
+	int src;
+	int dest;
+	int id;
+	int sub1;
+	int sub2;
+	int sub3;
+};
+
 typedef struct _manager_data_t
 {
 	struct blocking_notifier_head manager_muic_notifier;
-	struct blocking_notifier_head manager_ccic_notifier;
+	struct blocking_notifier_head manager_notifier;
 	struct notifier_block ccic_nb;
 	struct notifier_block muic_nb;
-//	struct notifier_block usb_nb;
-//	struct notifier_block batter_nb;
 #if defined(CONFIG_VBUS_NOTIFIER)
 	struct notifier_block vbus_nb;
 #endif
 
 	struct delayed_work manager_init_work;
-//	struct workqueue_struct *typec_manager_wq;
+	struct workqueue_struct *typec_manager_wq;
+	struct workqueue_struct *typec_manager_muic_wq;
 	struct delayed_work cable_check_work;
-	struct delayed_work muic_noti_work;
+	struct delayed_work usb_event_work;
+#if defined(CONFIG_USB_HW_PARAM)
 	struct delayed_work rtctime_update_work;
-#if defined(CONFIG_VBUS_NOTIFIER)
-	struct delayed_work vbus_noti_work;
 #endif
+#if defined(CONFIG_VBUS_NOTIFIER)
+	struct delayed_work muic_event_work;
+#endif
+	struct mutex mo_lock;
 
-	int muic_action;
+	int muic_attach_state;
 	int muic_cable_type;
-	int muic_data_refresh;
 	int muic_attach_state_without_ccic;
 #if defined(CONFIG_VBUS_NOTIFIER)
 	int muic_fake_event_wq_processing;
 #endif
 	int vbus_state;
+
+#ifdef CONFIG_USE_SECOND_MUIC
+	int second_muic_attach_state;
+	int second_muic_cable_type;
+#endif
 
 	int ccic_attach_state;	// USB_STATUS_NOTIFY_DETACH, UFP, DFP, DRP, NO_USB
 	int ccic_drp_state;
@@ -138,26 +163,28 @@ typedef struct _manager_data_t
 	int cable_type;
 	int usb_enum_state;
 	bool usb_enable_state;
+	unsigned long otg_stamp;
+	int vbus_by_otg_detection;
 	int pd_con_state;
 	int water_det;
 	int wVbus_det;
-	int is_UFPS;
+	int is_MPSM;
 	void *pd;
 	int cur_rid;
+#if defined(CONFIG_USB_HW_PARAM)
 	int water_count;
 	int dry_count;
 	int usb210_count;
 	int usb310_count;
 	int waterChg_count;
-	int water_cable_type;
 	unsigned long waterDet_duration;
 	unsigned long waterDet_time;
 	unsigned long dryDet_time;
-
 	unsigned long wVbus_duration;
 	unsigned long wVbusHigh_time;
 	unsigned long wVbusLow_time;
-
+#endif
+	int water_cable_type;
 	int dp_attach_state;
 	int dp_cable_type;
 	int dp_hpd_state;
@@ -165,6 +192,7 @@ typedef struct _manager_data_t
 	int dp_hs_connect;
 	int dp_check_done;
 	struct notifier_block manager_external_notifier_nb;
+	int alt_is_support;
 }manager_data_t;
 
 
