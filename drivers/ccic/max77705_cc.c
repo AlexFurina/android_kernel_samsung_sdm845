@@ -581,6 +581,9 @@ static void max77705_ccstat_irq_handler(void *data, int irq)
 			usbc_data->pd_data->current_dr = 0xFF;
 			usbc_data->cc_data->current_vcon = 0xFF;
 			usbc_data->detach_done_wait = 1;
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+			send_otg_notify(o_notify, NOTIFY_EVENT_PD_CONTRACT, 0);
+#endif
 		}
 	} else {
 		if (!usbc_data->plug_attach_done) {

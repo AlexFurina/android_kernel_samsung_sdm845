@@ -30,6 +30,9 @@
 #if defined(CONFIG_BATTERY_NOTIFIER)
 #include <linux/battery/battery_notifier.h>
 #endif
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+#include <linux/usb_notify.h>
+#endif
 #if defined(CONFIG_CCIC_NOTIFIER)
 #include <linux/ccic/ccic_core.h>
 #include <linux/ccic/ccic_notifier.h>
@@ -648,6 +651,9 @@ static irqreturn_t max77705_psrdy_irq(int irq, void *data)
 #if defined(CONFIG_TYPEC)
 	enum typec_pwr_opmode mode = TYPEC_PWR_MODE_USB;
 #endif
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+	struct otg_notify *o_notify = get_otg_notify();
+#endif
 
 	msg_maxim("IN");
 	max77705_read_reg(usbc_data->muic, REG_PD_STATUS1, &usbc_data->pd_status1);
@@ -674,6 +680,12 @@ static irqreturn_t max77705_psrdy_irq(int irq, void *data)
 #if defined(CONFIG_TYPEC)
 	mode = max77705_get_pd_support(usbc_data);
 	typec_set_pwr_opmode(usbc_data->port, mode);
+#endif
+#if IS_ENABLED(CONFIG_USB_NOTIFY_LAYER)
+	if (mode == TYPEC_PWR_MODE_PD)
+		send_otg_notify(o_notify, NOTIFY_EVENT_PD_CONTRACT, 1);
+	else
+		send_otg_notify(o_notify, NOTIFY_EVENT_PD_CONTRACT, 0);
 #endif
 
 	if (usbc_data->pd_data->cc_status == CC_SNK) {

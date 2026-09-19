@@ -31,12 +31,18 @@
 #include <linux/usb/manager/usb_typec_manager_notifier.h>
 #endif
 
-extern int dwc_msm_vbus_event(bool enable);
-extern int dwc_msm_id_event(bool enable);
-extern void dwc3_max_speed_setting(int speed);
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
-extern void set_ncm_ready(bool ready);
+#if defined(CONFIG_COMBO_REDRIVER_PTN36502)
+#include <linux/combo_redriver/ptn36502.h>
 #endif
+
+extern int dwc_msm_vbus_event(bool enable);
+extern void dwc3_max_speed_setting(int speed);
+
+extern void set_ncm_ready(bool ready);
+extern int dwc_msm_id_event(bool enable);
+extern int gadget_speed(void);
+extern int is_dwc3_msm_probe_done(void);
+
 #if defined(CONFIG_CCIC_NOTIFIER)
 int is_host;
 #endif
@@ -53,6 +59,7 @@ struct usb_notifier_platform_data {
 #endif
 	int	gpio_redriver_en;
 	int disable_control_en;
+	int	unsupport_host_en;
 };
 
 #ifdef CONFIG_OF
@@ -77,6 +84,14 @@ static void of_get_disable_control_en_dt(struct device_node *np,
 	pr_info("disable_control_en : %d\n", pdata->disable_control_en);
 }
 
+static void of_get_unsupport_host_dt(struct device_node *np,
+		struct usb_notifier_platform_data *pdata)
+{
+	of_property_read_u32(np, "qcom,unsupport_host_en", &pdata->unsupport_host_en);
+
+	pr_info("unsupport_host_en : %d\n", pdata->unsupport_host_en);
+}
+
 static int of_usb_notifier_dt(struct device *dev,
 		struct usb_notifier_platform_data *pdata)
 {
@@ -87,6 +102,7 @@ static int of_usb_notifier_dt(struct device *dev,
 
 	of_get_usb_redriver_dt(np, pdata);
 	of_get_disable_control_en_dt(np, pdata);
+	of_get_unsupport_host_dt(np, pdata);
 	return 0;
 }
 #endif
@@ -105,16 +121,26 @@ static int ccic_usb_handle_notification(struct notifier_block *nb,
 	switch (usb_status.drp){
 		case USB_STATUS_NOTIFY_ATTACH_DFP:
 			pr_info("%s: Turn On Host(DFP), max speed restrict = %d\n", __func__, usb_status.sub3);
+
+//UFP = 0, DFP = 1
+#if defined(CONFIG_COMBO_REDRIVER_PTN36502)
+			ptn36502_config(USB3_ONLY_MODE, 1);
+#endif
 			dwc3_max_speed_setting(usb_status.sub3);
 			send_otg_notify(o_notify, NOTIFY_EVENT_HOST, 1);
 			is_host = 1;
 			break;
 		case USB_STATUS_NOTIFY_ATTACH_UFP:
 			pr_info("%s: Turn On Device(UFP)\n", __func__);
+#if defined(CONFIG_COMBO_REDRIVER_PTN36502)
+			ptn36502_config(USB3_ONLY_MODE, 0);
+#endif
 			dwc3_max_speed_setting(usb_status.sub3);
 			send_otg_notify(o_notify, NOTIFY_EVENT_VBUS, 1);
+#ifdef CONFIG_DISABLE_LOCKSCREEN_USB_RESTRICTION				
 			if(is_blocked(o_notify, NOTIFY_BLOCK_TYPE_CLIENT))
-				return -EPERM;
+				return -EPERM;			
+#endif
 			break;
 		case USB_STATUS_NOTIFY_DETACH:
 			if(is_host) {
@@ -306,19 +332,23 @@ static int otg_accessory_power(bool enable)
 
 	return ret;
 }
+
 static int qcom_set_peripheral(bool enable)
 {
 	dwc_msm_vbus_event(enable);
-#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
 	if(!enable)
 		set_ncm_ready(false);
-#endif
 	return 0;
 }
+
+static int qcom_get_gadget_speed(void)
+{
+	return gadget_speed();
+}
+
 static int qcom_set_host(bool enable)
 {
 	dwc_msm_id_event(enable);
-
 	return 0;
 }
 
@@ -384,9 +414,12 @@ static int usb_blocked_chg_control(int set)
 static struct otg_notify sec_otg_notify = {
 	.vbus_drive	= otg_accessory_power,
 	.set_peripheral	= qcom_set_peripheral,
+	.get_gadget_speed = qcom_get_gadget_speed,
 	.set_host = qcom_set_host,
 	.vbus_detect_gpio = -1,
 	.is_wakelock = 1,
+	.is_host_wakelock = 0,
+	.unsupport_host = 0,	
 	.booting_delay_sec = 10,
 	.disable_control = 1,
 	.device_check_sec = 3,
@@ -431,8 +464,11 @@ static int usb_notifier_probe(struct platform_device *pdev)
 	sec_otg_notify.redriver_en_gpio = pdata->gpio_redriver_en;
 	if (pdata->disable_control_en == 1)
 		sec_otg_notify.disable_control = 1;
+	if (pdata->unsupport_host_en == 1)
+		sec_otg_notify.unsupport_host = 1;	
 	set_otg_notify(&sec_otg_notify);
 	set_notify_data(&sec_otg_notify, pdata);
+	sec_otg_notify.booting_delay_sync_usb = is_dwc3_msm_probe_done() ? 0 : 1;
 #if defined(CONFIG_CCIC_NOTIFIER)
 	is_host = 0;
 #ifdef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
