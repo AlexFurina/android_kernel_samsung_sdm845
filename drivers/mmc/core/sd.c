@@ -249,7 +249,8 @@ static int mmc_read_ssr(struct mmc_card *card)
 	if (!(card->csd.cmdclass & CCC_APP_SPEC)) {
 		pr_warn("%s: card lacks mandatory SD Status function\n",
 			mmc_hostname(card->host));
-		return 0;
+		/* cmdclass has to be 1 from CSD version 1.0 */
+		return -ENXIO;
 	}
 
 	raw_ssr = kmalloc(sizeof(card->raw_ssr), GFP_KERNEL);
@@ -1202,6 +1203,13 @@ static void mmc_sd_detect(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+	if (host->ops->get_cd && !host->ops->get_cd(host)) {
+		err = -ENOMEDIUM;
+		mmc_card_set_removed(host->card);
+		mmc_card_clr_suspended(host->card);
+		goto out;
+	}
+
 	/*
 	 * Try to acquire claim host. If failed to get the lock in 2 sec,
 	 * just return; This is to ensure that when this call is invoked
@@ -1216,13 +1224,6 @@ static void mmc_sd_detect(struct mmc_host *host)
 
 	if (mmc_bus_needs_resume(host))
 		mmc_resume_bus(host);
-
-	if (host->ops->get_cd && !host->ops->get_cd(host)) {
-		err = -ENOMEDIUM;
-		mmc_card_set_removed(host->card);
-		mmc_card_clr_suspended(host->card);
-		goto out;
-	}
 
 	/*
 	 * Just check if our card has been removed.
@@ -1246,9 +1247,9 @@ static void mmc_sd_detect(struct mmc_host *host)
 	err = _mmc_detect_card_removed(host);
 #endif
 
-out:
 	mmc_put_card(host->card);
 
+out:
 	if (err) {
 		mmc_sd_remove(host);
 
@@ -1366,7 +1367,6 @@ static int _mmc_sd_resume(struct mmc_host *host)
 	} else if (err) {
 		goto out;
 	}
-	mmc_card_clr_suspended(host->card);
 
 	if (host->card->sdr104_blocked)
 		goto out;
@@ -1378,6 +1378,7 @@ static int _mmc_sd_resume(struct mmc_host *host)
 	}
 
 out:
+	mmc_card_clr_suspended(host->card);
 	mmc_release_host(host);
 	return err;
 }

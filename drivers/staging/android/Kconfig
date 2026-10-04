@@ -53,6 +53,12 @@ config ANDROID_LMK_NOTIFY_TRIGGER
 	a set threshold. The threshold is set by the new module parameter
 	"/sys/module/lowmemorykiller/parameters/notify_trigger".
 
+config SAMSUNG_FREECESS
+	bool "thraw frozen process when recv sig"
+	default n
+	help
+	  thraw frozen process when recv sig.
+
 source "drivers/staging/android/ion/Kconfig"
 
 endif # if ANDROID

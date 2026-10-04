@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2018, 2021 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,8 +36,8 @@
  */
 struct cam_fd_dev {
 	struct cam_subdev     sd;
-	struct cam_context    base_ctx[CAM_CTX_MAX];
-	struct cam_fd_context fd_ctx[CAM_CTX_MAX];
+	struct cam_context    base_ctx[CAM_FD_CTX_MAX];
+	struct cam_fd_context fd_ctx[CAM_FD_CTX_MAX];
 	struct mutex          lock;
 	uint32_t              open_cnt;
 	bool                  probe_done;
@@ -50,11 +50,8 @@ static int cam_fd_dev_open(struct v4l2_subdev *sd,
 {
 	struct cam_fd_dev *fd_dev = &g_fd_dev;
 
-	cam_req_mgr_rwsem_read_op(CAM_SUBDEV_LOCK);
-
 	if (!fd_dev->probe_done) {
 		CAM_ERR(CAM_FD, "FD Dev not initialized, fd_dev=%pK", fd_dev);
-		cam_req_mgr_rwsem_read_op(CAM_SUBDEV_UNLOCK);
 		return -ENODEV;
 	}
 
@@ -62,8 +59,6 @@ static int cam_fd_dev_open(struct v4l2_subdev *sd,
 	fd_dev->open_cnt++;
 	CAM_DBG(CAM_FD, "FD Subdev open count %d", fd_dev->open_cnt);
 	mutex_unlock(&fd_dev->lock);
-
-	cam_req_mgr_rwsem_read_op(CAM_SUBDEV_UNLOCK);
 
 	return 0;
 }
@@ -124,7 +119,7 @@ static int cam_fd_dev_probe(struct platform_device *pdev)
 		goto unregister_subdev;
 	}
 
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_FD_CTX_MAX; i++) {
 		rc = cam_fd_context_init(&g_fd_dev.fd_ctx[i],
 			&g_fd_dev.base_ctx[i], &node->hw_mgr_intf, i);
 		if (rc) {
@@ -134,8 +129,8 @@ static int cam_fd_dev_probe(struct platform_device *pdev)
 		}
 	}
 
-	rc = cam_node_init(node, &hw_mgr_intf, g_fd_dev.base_ctx, CAM_CTX_MAX,
-		CAM_FD_DEV_NAME);
+	rc = cam_node_init(node, &hw_mgr_intf, g_fd_dev.base_ctx,
+		CAM_FD_CTX_MAX, CAM_FD_DEV_NAME);
 	if (rc) {
 		CAM_ERR(CAM_FD, "FD node init failed, rc=%d", rc);
 		goto deinit_ctx;
@@ -164,7 +159,7 @@ static int cam_fd_dev_remove(struct platform_device *pdev)
 {
 	int i, rc;
 
-	for (i = 0; i < CAM_CTX_MAX; i++) {
+	for (i = 0; i < CAM_FD_CTX_MAX; i++) {
 		rc = cam_fd_context_deinit(&g_fd_dev.fd_ctx[i]);
 		if (rc)
 			CAM_ERR(CAM_FD, "FD context %d deinit failed, rc=%d",
@@ -199,7 +194,6 @@ static struct platform_driver cam_fd_driver = {
 		.name = "cam_fd",
 		.owner = THIS_MODULE,
 		.of_match_table = cam_fd_dt_match,
-		.suppress_bind_attrs = true,
 	},
 };
 
