@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,10 @@
 #include <dsp/q6audio-v2.h>
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+#include <dsp/sec_adaptation.h>
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 #define WAKELOCK_TIMEOUT	5000
 enum {
@@ -598,8 +602,6 @@ int afe_get_port_type(u16 port_id)
 	case VOICE_RECORD_RX:
 	case INT_BT_SCO_TX:
 	case RT_PROXY_PORT_001_TX:
-	case RT_PROXY_PORT_002_RX:
-	case RT_PROXY_PORT_002_TX:
 	case AFE_PORT_ID_PRIMARY_MI2S_TX:
 	case AFE_PORT_ID_SECONDARY_MI2S_TX:
 	case AFE_PORT_ID_TERTIARY_MI2S_TX:
@@ -663,7 +665,6 @@ int afe_get_port_type(u16 port_id)
 		break;
 
 	default:
-		WARN_ON(1);
 		pr_err("%s: Invalid port id = 0x%x\n",
 			__func__, port_id);
 		ret = -EINVAL;
@@ -1381,8 +1382,8 @@ static struct cal_block_data *afe_find_cal_topo_id_by_port(
 		cal_block = list_entry(ptr,
 			struct cal_block_data, list);
 		/* Skip cal_block if it is already marked stale */
-		if (cal_utils_is_cal_stale(cal_block))
-			continue;
+		/* if (cal_utils_is_cal_stale(cal_block))
+			continue; */
 		path = ((afe_get_port_type(port_id) ==
 			MSM_AFE_PORT_TYPE_TX)?(TX_DEVICE):(RX_DEVICE));
 		afe_top =
@@ -1462,6 +1463,26 @@ unlock:
 	mutex_unlock(&this_afe.cal_data[cal_type_index]->lock);
 	return ret;
 }
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+static int afe_validate_cal(u16 port_id)
+{
+	int ret = 0;
+	u32 topology_id = 0;
+
+	ret = afe_get_cal_topology_id(port_id, &topology_id, AFE_TOPOLOGY_CAL);
+	if (ret || !topology_id) {
+		pr_debug("%s: AFE port[%d] get_cal_topology[%d] invalid!\n",
+				__func__, port_id, topology_id);
+		goto done;
+	}
+
+	ret = q6audio_get_afe_cal_validation(port_id, topology_id);
+
+done:
+	return ret;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 static int afe_send_port_topology_id(u16 port_id)
 {
@@ -3006,7 +3027,7 @@ static int q6afe_send_enc_config(u16 port_id,
 				 union afe_enc_config_data *cfg, u32 format,
 				 union afe_port_config afe_config,
 				 u16 afe_in_channels, u16 afe_in_bit_width,
-				 u32 scrambler_mode, u32 mono_mode)
+				 u32 scrambler_mode)
 {
 	struct afe_audioif_config_command config;
 	int index;
@@ -3017,7 +3038,8 @@ static int q6afe_send_enc_config(u16 port_id,
 	pr_debug("%s:update DSP for enc format = %d\n", __func__, format);
 	if (format != ASM_MEDIA_FMT_SBC && format != ASM_MEDIA_FMT_AAC_V2 &&
 	    format != ASM_MEDIA_FMT_APTX && format != ASM_MEDIA_FMT_APTX_HD &&
-	    format != ASM_MEDIA_FMT_CELT && format != ASM_MEDIA_FMT_LDAC) {
+	    format != ASM_MEDIA_FMT_CELT && format != ASM_MEDIA_FMT_LDAC && 
+	    format != ASM_MEDIA_FMT_SSC && format != ASM_MEDIA_FMT_SSHD) {
 		pr_err("%s:Unsuppported format Ignore AFE config\n", __func__);
 		return 0;
 	}
@@ -3139,8 +3161,8 @@ static int q6afe_send_enc_config(u16 port_id,
 					__func__, config.param.payload_size);
 	config.pdata.param_id = AFE_ENCODER_PARAM_ID_PACKETIZER_ID;
 	config.pdata.param_size = sizeof(config.port.enc_pkt_id_param);
-	config.port.enc_pkt_id_param.enc_packetizer_id =
-					AFE_MODULE_ID_PACKETIZER_COP;
+	config.port.enc_pkt_id_param.enc_packetizer_id = 0x1000F101;
+					//AFE_MODULE_ID_PACKETIZER_COP;
 	ret = afe_apr_send_pkt(&config, &this_afe.wait[index]);
 	if (ret) {
 		pr_err("%s: AFE_ENCODER_PARAM_ID_PACKETIZER for port 0x%x failed %d\n",
@@ -3162,22 +3184,8 @@ static int q6afe_send_enc_config(u16 port_id,
 		goto exit;
 	}
 
-	if (format == ASM_MEDIA_FMT_APTX) {
-		config.param.payload_size =
-			payload_size + sizeof(config.port.channel_mode_param);
-		pr_debug("%s:sending CAPI_V2_PARAM_ID_APTX_ENC_SWITCH_TO_MONO mode= %d to DSP payload\n",
-			__func__, mono_mode);
-		config.pdata.param_id = CAPI_V2_PARAM_ID_APTX_ENC_SWITCH_TO_MONO;
-		config.pdata.param_size = sizeof(config.port.channel_mode_param);
-		config.port.channel_mode_param.channel_mode = mono_mode;
-                ret = afe_apr_send_pkt(&config, &this_afe.wait[index]);
-		if (ret) {
-			pr_err("%s: CAPI_V2_PARAM_ID_APTX_ENC_SWITCH_TO_MONO for port 0x%x failed %d\n",
-				__func__, port_id, ret);
-		}
-       }
 	if (format == ASM_MEDIA_FMT_LDAC &&
-		cfg->ldac_config.abr_config.is_abr_enabled) {
+	    cfg->ldac_config.abr_config.is_abr_enabled) {
 		config.param.payload_size =
 			payload_size + sizeof(config.port.map_param);
 		pr_debug("%s:sending AFE_ENCODER_PARAM_ID_BIT_RATE_LEVEL_MAP to DSP payload = %d\n",
@@ -3222,20 +3230,20 @@ static int q6afe_send_enc_config(u16 port_id,
 		config.port.media_type.sample_rate =
 			cfg->ldac_config.custom_config.sample_rate;
 	else
-		config.port.media_type.sample_rate =
-			afe_config.slim_sch.sample_rate;
+		config.port.media_type.sample_rate = AFE_PORT_SAMPLE_RATE_48K;//afe_config.i2s.sample_rate;
+			///*afe_config.slim_sch.sample_rate*/AFE_PORT_SAMPLE_RATE_44_1K;//AFE_PORT_SAMPLE_RATE_48K;
 
 	if (afe_in_bit_width)
 		config.port.media_type.bit_width = afe_in_bit_width;
 	else
-		config.port.media_type.bit_width =
-					afe_config.slim_sch.bit_width;
+		config.port.media_type.bit_width = afe_config.i2s.bit_width;//16; //AFE_BITS_PER_SAMPLE_16;
+					/*afe_config.slim_sch.bit_width;*/
 
 	if (afe_in_channels)
 		config.port.media_type.num_channels = afe_in_channels;
 	else
-		config.port.media_type.num_channels =
-					afe_config.slim_sch.num_channels;
+		config.port.media_type.num_channels = 2;
+					/*afe_config.slim_sch.num_channels;*/
 	config.port.media_type.data_format = AFE_PORT_DATA_FORMAT_PCM;
 	config.port.media_type.reserved = 0;
 
@@ -3250,61 +3258,10 @@ exit:
 	return ret;
 }
 
-int afe_set_tws_channel_mode(u16 port_id, u32 channel_mode)
-{
-	struct aptx_channel_mode_param_t channel_mode_param;
-	int ret = 0;
-	int index = 0;
-
-	pr_debug("%s: enter\n", __func__);
-	index = q6audio_get_port_index(port_id);
-	if (index < 0 || index >= AFE_MAX_PORTS) {
-		pr_err("%s: AFE port index[%d] invalid!\n",
-			__func__, index);
-		return -EINVAL;
-	}
-
-	ret = q6audio_validate_port(port_id);
-	if (ret < 0) {
-		pr_err("%s: port id: 0x%x ret %d\n", __func__, port_id, ret);
-		return -EINVAL;
-	}
-
-	channel_mode_param.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-					APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
-	channel_mode_param.hdr.pkt_size = sizeof(channel_mode_param);
-	channel_mode_param.hdr.src_port = 0;
-	channel_mode_param.hdr.dest_port = 0;
-	channel_mode_param.hdr.token = index;
-
-	channel_mode_param.hdr.opcode = AFE_PORT_CMD_SET_PARAM_V2;
-	channel_mode_param.param.payload_size = sizeof(channel_mode_param) - sizeof(struct apr_hdr)
-						- sizeof(channel_mode_param.param);
-
-	channel_mode_param.param.payload_address_lsw = 0x00;
-	channel_mode_param.param.payload_address_msw = 0x00;
-	channel_mode_param.param.mem_map_handle = 0x00;
-	channel_mode_param.param.port_id = q6audio_get_port_id(port_id);
-	channel_mode_param.pdata.module_id = AFE_MODULE_ID_ENCODER;
-	channel_mode_param.pdata.param_id = CAPI_V2_PARAM_ID_APTX_ENC_SWITCH_TO_MONO;
-	channel_mode_param.pdata.param_size =  sizeof(channel_mode_param.channel_mode);
-
-	channel_mode_param.channel_mode = channel_mode;
-
-	ret = afe_apr_send_pkt(&channel_mode_param, &this_afe.wait[index]);
-
-	if (ret)
-		pr_err("%s: AFE set channel mode cfg for port 0x%x failed %d\n",
-			__func__, port_id, ret);
-
-	return ret;
-}
-EXPORT_SYMBOL(afe_set_tws_channel_mode);
-
 static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 			    u32 rate, u16 afe_in_channels, u16 afe_in_bit_width,
 			    union afe_enc_config_data *enc_cfg,
-			    u32 codec_format, u32 scrambler_mode, u32 mono_mode,
+			    u32 codec_format, u32 scrambler_mode,
 			    struct afe_dec_config *dec_cfg)
 {
 	struct afe_audioif_config_command config;
@@ -3346,7 +3303,7 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		port_id = VIRTUAL_ID_TO_PORTID(port_id);
 	}
 
-	pr_debug("%s: port id: 0x%x\n", __func__, port_id);
+	pr_info("%s: port id: 0x%x\n", __func__, port_id);
 
 	index = q6audio_get_port_index(port_id);
 	if (index < 0 || index >= AFE_MAX_PORTS) {
@@ -3378,9 +3335,15 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	port_index = afe_get_port_index(port_id);
 	if (!(this_afe.afe_cal_mode[port_index] == AFE_CAL_MODE_NONE)) {
 		/* One time call: only for first time */
-		afe_send_custom_topology();
-		afe_send_port_topology_id(port_id);
-		afe_send_cal(port_id);
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		if (afe_validate_cal(port_id)) {
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+			afe_send_custom_topology();
+			afe_send_port_topology_id(port_id);
+			afe_send_cal(port_id);
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 		afe_send_hw_delay(port_id, rate);
 	}
 
@@ -3524,9 +3487,6 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		break;
 	case RT_PROXY_PORT_001_RX:
 	case RT_PROXY_PORT_001_TX:
-	case RT_PROXY_PORT_002_RX:
-	case RT_PROXY_PORT_002_TX:
-
 		cfg_type = AFE_PARAM_ID_RT_PROXY_CONFIG;
 		break;
 	case INT_BT_SCO_RX:
@@ -3556,8 +3516,14 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	if (((enc_cfg != NULL) || (dec_cfg != NULL)) &&
 	    (codec_format != ASM_MEDIA_FMT_NONE) &&
 	    (cfg_type == AFE_PARAM_ID_SLIMBUS_CONFIG)) {
+		pr_info("%s: AFE_PARAM_ID_SLIMBUS_CONFIG codec_format %4X\n", __func__, codec_format);
 		config.port.slim_sch.data_format =
 				AFE_SB_DATA_FORMAT_GENERIC_COMPRESSED;
+	} else if ((codec_format != ASM_MEDIA_FMT_NONE) && 
+		(cfg_type == AFE_PARAM_ID_I2S_CONFIG)) { 
+		pr_info("%s: AFE_PARAM_ID_I2S_CONFIG codec_format %4X\n", __func__, codec_format);
+		config.port.i2s.data_format = AFE_GENERIC_COMPRESSED;
+		//AFE_NON_LINEAR_DATA; 
 	}
 	ret = afe_apr_send_pkt(&config, &this_afe.wait[index]);
 	if (ret) {
@@ -3567,15 +3533,15 @@ static int __afe_port_start(u16 port_id, union afe_port_config *afe_config,
 	}
 
 	if ((codec_format != ASM_MEDIA_FMT_NONE) &&
-	    (cfg_type == AFE_PARAM_ID_SLIMBUS_CONFIG)) {
+	    ((cfg_type == AFE_PARAM_ID_SLIMBUS_CONFIG) || (cfg_type == AFE_PARAM_ID_I2S_CONFIG))) {
 		if (enc_cfg != NULL) {
-			pr_debug("%s: Found AFE encoder support for SLIMBUS enc_format = %d\n",
-						__func__, codec_format);
+			pr_info("%s: Found AFE encoder support for enc_format = %d cfg_type=%d\n",
+						__func__, codec_format, cfg_type);
 			ret = q6afe_send_enc_config(port_id, enc_cfg,
 						    codec_format, *afe_config,
 						    afe_in_channels,
 						    afe_in_bit_width,
-						    scrambler_mode, mono_mode);
+						    scrambler_mode);
 			if (ret) {
 				pr_err("%s: AFE encoder config for port 0x%x failed %d\n",
 					__func__, port_id, ret);
@@ -3640,7 +3606,7 @@ int afe_port_start(u16 port_id, union afe_port_config *afe_config,
 		   u32 rate)
 {
 	return __afe_port_start(port_id, afe_config, rate,
-				0, 0, NULL, ASM_MEDIA_FMT_NONE, 0, 0, NULL);
+				0, 0, NULL, ASM_MEDIA_FMT_NONE, 0, NULL);
 }
 EXPORT_SYMBOL(afe_port_start);
 
@@ -3669,12 +3635,11 @@ int afe_port_start_v2(u16 port_id, union afe_port_config *afe_config,
 		ret = __afe_port_start(port_id, afe_config, rate,
 					afe_in_channels, afe_in_bit_width,
 					&enc_cfg->data, enc_cfg->format,
-					enc_cfg->scrambler_mode,
-					enc_cfg->mono_mode, dec_cfg);
+					enc_cfg->scrambler_mode, dec_cfg);
 	else if (dec_cfg != NULL)
 		ret = __afe_port_start(port_id, afe_config, rate,
 					afe_in_channels, afe_in_bit_width,
-					NULL, dec_cfg->format, 0, 0, dec_cfg);
+					NULL, dec_cfg->format, 0, dec_cfg);
 
 	return ret;
 }
@@ -3958,10 +3923,6 @@ int afe_get_port_index(u16 port_id)
 		return IDX_AFE_PORT_ID_INT6_MI2S_RX;
 	case AFE_PORT_ID_INT6_MI2S_TX:
 		return IDX_AFE_PORT_ID_INT6_MI2S_TX;
-	case RT_PROXY_PORT_002_RX:
-		return IDX_RT_PROXY_PORT_002_RX;
-	case RT_PROXY_PORT_002_TX:
-		return IDX_RT_PROXY_PORT_002_TX;
 	default:
 		pr_err("%s: port 0x%x\n", __func__, port_id);
 		return -EINVAL;
@@ -5865,9 +5826,6 @@ int afe_validate_port(u16 port_id)
 	case AFE_PORT_ID_INT4_MI2S_TX:
 	case AFE_PORT_ID_INT5_MI2S_TX:
 	case AFE_PORT_ID_INT6_MI2S_TX:
-	case RT_PROXY_PORT_002_RX:
-	case RT_PROXY_PORT_002_TX:
-
 	{
 		ret = 0;
 		break;
@@ -5957,7 +5915,7 @@ int afe_close(int port_id)
 		ret = -EINVAL;
 		goto fail_cmd;
 	}
-	pr_debug("%s: port_id = 0x%x\n", __func__, port_id);
+	pr_info("%s: port_id = 0x%x\n", __func__, port_id);
 	if ((port_id == RT_PROXY_DAI_001_RX) ||
 			(port_id == RT_PROXY_DAI_002_TX)) {
 		pr_debug("%s: before decrementing pcm_afe_instance %d\n",

@@ -142,6 +142,9 @@ int apr_tal_write(struct apr_svc_ch_dev *apr_ch, void *data,
 
 	if (rc < 0) {
 		pr_err("%s: Unable to send the packet, rc:%d\n", __func__, rc);
+#ifdef CONFIG_SEC_SND_DEBUG
+		panic("Unable to send the packet\n");
+#endif /* CONFIG_SEC_SND_DEBUG */
 		if (pkt_priv->pkt_owner == APR_PKT_OWNER_DRIVER)
 			kfree(tx_buf);
 	}

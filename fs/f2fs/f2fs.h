@@ -28,12 +28,16 @@
 
 #include <linux/fscrypt.h>
 
+extern void (*ufs_debug_func)(void *);
+
 #ifdef CONFIG_F2FS_CHECK_FS
 #define f2fs_bug_on(sbi, condition)	BUG_ON(condition)
 #else
 #define f2fs_bug_on(sbi, condition)					\
 	do {								\
 		if (unlikely(condition)) {				\
+			if (ufs_debug_func)					\
+				ufs_debug_func(NULL);				\
 			WARN_ON(1);					\
 			set_sbi_flag(sbi, SBI_NEED_FSCK);		\
 		}							\
