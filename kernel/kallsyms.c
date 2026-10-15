@@ -75,7 +75,7 @@ void sec_debug_summary_set_kallsyms_info(
 	apss->ksyms.sect.etext = (uintptr_t)_etext;
 	apss->ksyms.sect.end = (uintptr_t)_end;
 
-	apss->ksyms.kallsyms_all = all_var;
+	apss->ksyms.kallsyms_all = IS_ENABLED(CONFIG_KALLSYMS_ALL);
 	apss->ksyms.magic = SEC_DEBUG_SUMMARY_MAGIC1;
 }
 #endif
