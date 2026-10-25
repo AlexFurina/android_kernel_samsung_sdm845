@@ -20,7 +20,7 @@ snd-soc-sdm670-objs := sdm660-common.o sdm660-internal.o sdm660-external.o sdm66
 obj-$(CONFIG_SND_SOC_SDM670) += snd-soc-sdm670.o
 
 # for SDM845 sound card driver
-snd-soc-sdm845-objs := sdm845.o
+snd-soc-sdm845-objs := sdm845.o sec_wcd_sysfs_cb.o
 obj-$(CONFIG_SND_SOC_MACHINE_SDM845) += snd-soc-sdm845.o
 
 # for SDXPOORWILLS sound card driver

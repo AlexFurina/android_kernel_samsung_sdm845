@@ -92,11 +92,6 @@ struct asm_mmap {
 
 static struct asm_mmap this_mmap;
 
-struct audio_session {
-	struct audio_client *ac;
-	spinlock_t session_lock;
-	struct mutex mutex_lock_per_session;
-};
 /* session id: 0 reserved */
 static struct audio_session session[ASM_ACTIVE_STREAMS_ALLOWED + 1];
 
@@ -191,6 +186,13 @@ static int is_adsp_raise_event(uint32_t cmd)
 	}
 	return -EINVAL;
 }
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+struct audio_session *q6asm_get_audio_session(void)
+{
+	return session;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 static inline void q6asm_set_flag_in_token(union asm_token_struct *asm_token,
 					   int flag, int flag_offset)
